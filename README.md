@@ -2,6 +2,19 @@
 
 Actname is a deterministic, offline-first semantic naming engine written in Rust.
 
+## Install
+
+Needs Rust 1.85 or newer (`rustup`).
+
+```text
+cargo install --locked --git https://github.com/grosjeanbaptiste/Actname
+export PATH="$HOME/.cargo/bin:$PATH"
+actname generate --prefix act --domain architecture --limit 3
+```
+
+From a checkout: `cargo install --locked --path .`. The binary is
+`~/.cargo/bin/actname`; update by re-running the first command with `--force`.
+
 ## API
 
 ### Command line
