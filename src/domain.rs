@@ -153,11 +153,15 @@ pub fn evaluate(name: &str, lexeme: &Lexeme, context: &BTreeSet<String>) -> Opti
         .filter(|concept| context.contains(&normalize(concept)))
         .count();
 
+    evaluate_matches(name, lexeme.form, matches)
+}
+
+pub fn evaluate_matches(name: &str, form: Form, matches: usize) -> Option<Score> {
     if matches == 0 {
         return None;
     }
 
-    let semantic = (40 + matches as u16 * 12).min(100) as u8;
+    let semantic = (40 + (matches as u64).saturating_mul(12)).min(100) as u8;
 
     let length_penalty = name.len().saturating_sub(7) as i32 * 3;
 
@@ -182,7 +186,7 @@ pub fn evaluate(name: &str, lexeme: &Lexeme, context: &BTreeSet<String>) -> Opti
     let readability =
         (100 - length_penalty - consonant_penalty - repetition_penalty).clamp(0, 100) as u8;
 
-    let originality = match lexeme.form {
+    let originality = match form {
         Form::Composed => 70,
         Form::Coined => 90,
     };

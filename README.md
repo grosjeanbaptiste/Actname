@@ -127,3 +127,27 @@ semantic scoring and the CLI.
 
 The implementation is rule-based and does not claim linguistic
 validity or trademark availability.
+
+## Integrated semantic and morphological ranking
+
+The naming application combines lexical and morphological candidates.
+
+Morphological roots are selected from recognized semantic concepts.
+Candidates without semantic evidence are rejected.
+
+All candidates share the same semantic, readability, originality
+and total scoring model.
+
+The integrated pipeline preserves:
+
+- Deterministic output
+- Unique candidate names
+- Semantic relevance constraints
+- Maximum-length constraints
+- Generation strategies
+- Exclusion lists
+- Result limits
+- Existing CLI text and JSON formats
+
+Morphological candidates are integrated before global ranking,
+deduplication and result truncation.
