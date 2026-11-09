@@ -1,0 +1,28 @@
+name: Rust
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Tests
+        run: cargo test --locked --all-targets
+
+      - name: Clippy
+        run: cargo clippy --locked --lib --bins -- -D warnings
+
+      - name: Release build
+        run: cargo build --locked --release

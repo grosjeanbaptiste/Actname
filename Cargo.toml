@@ -1,0 +1,26 @@
+[package]
+name = "actname"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Deterministic semantic project naming engine"
+license = "MIT"
+
+[lib]
+name = "actname"
+path = "src/lib.rs"
+
+[[bin]]
+name = "actname"
+path = "src/main.rs"
+
+[dependencies]
+
+[dev-dependencies]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
