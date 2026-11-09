@@ -1,6 +1,7 @@
 pub mod application;
 pub mod domain;
 pub mod infrastructure;
+pub mod semantics;
 
 pub use application::NamingService;
 pub use domain::{Candidate, Form, Lexeme, Lexicon, NamingCriteria, NamingError, Score, Strategy};

@@ -17,11 +17,11 @@ fn cli_generates_names_from_parameters() {
             "10",
         ])
         .output()
-        .unwrap();
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(output.status.success());
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap_or_else(|error| panic!("{error}"));
 
     assert!(stdout.contains("actecture"));
 }
@@ -39,11 +39,11 @@ fn cli_supports_json_output() {
             "json",
         ])
         .output()
-        .unwrap();
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(output.status.success());
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap_or_else(|error| panic!("{error}"));
 
     assert!(stdout.starts_with('['));
     assert!(stdout.contains("\"name\""));
@@ -55,7 +55,7 @@ fn cli_rejects_unknown_options() {
     let output = Command::new(env!("CARGO_BIN_EXE_actname"))
         .args(["generate", "--unknown"])
         .output()
-        .unwrap();
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(!output.status.success());
 }
@@ -65,11 +65,11 @@ fn cli_displays_help() {
     let output = Command::new(env!("CARGO_BIN_EXE_actname"))
         .arg("--help")
         .output()
-        .unwrap();
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(output.status.success());
 
-    let stdout = String::from_utf8(output.stdout).unwrap();
+    let stdout = String::from_utf8(output.stdout).unwrap_or_else(|error| panic!("{error}"));
 
     assert!(stdout.contains("generate"));
     assert!(stdout.contains("--domain"));

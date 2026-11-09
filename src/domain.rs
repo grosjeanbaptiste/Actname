@@ -143,11 +143,7 @@ pub fn normalize(value: &str) -> String {
 }
 
 pub fn semantic_tokens(context: &str) -> BTreeSet<String> {
-    normalize(context)
-        .split(|character: char| !character.is_ascii_alphabetic())
-        .filter(|token| token.len() > 2)
-        .map(str::to_owned)
-        .collect()
+    crate::semantics::default_knowledge_base().expand(context)
 }
 
 pub fn evaluate(name: &str, lexeme: &Lexeme, context: &BTreeSet<String>) -> Option<Score> {

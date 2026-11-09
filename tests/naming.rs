@@ -49,14 +49,14 @@ fn rejects_invalid_length_and_limit() {
 
 #[test]
 fn generates_names_respecting_all_constraints() {
-    let lexicon = InMemoryLexicon::default();
+    let lexicon = InMemoryLexicon;
     let service = NamingService::new(&lexicon);
 
     let results = service
         .generate(&criteria(
             "conception de plans physiques bâtiments objets technologiques",
         ))
-        .unwrap();
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(!results.is_empty());
 
@@ -69,12 +69,12 @@ fn generates_names_respecting_all_constraints() {
 
 #[test]
 fn associates_architecture_with_relevant_names() {
-    let lexicon = InMemoryLexicon::default();
+    let lexicon = InMemoryLexicon;
     let service = NamingService::new(&lexicon);
 
     let results = service
         .generate(&criteria("architecture bâtiments plans conception"))
-        .unwrap();
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(
         results
@@ -85,13 +85,15 @@ fn associates_architecture_with_relevant_names() {
 
 #[test]
 fn excludes_forbidden_names() {
-    let lexicon = InMemoryLexicon::default();
+    let lexicon = InMemoryLexicon;
     let service = NamingService::new(&lexicon);
 
     let mut input = criteria("architecture bâtiments plans");
     input.exclusions = vec!["actecture".into()];
 
-    let results = service.generate(&input).unwrap();
+    let results = service
+        .generate(&input)
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(
         results
@@ -102,13 +104,15 @@ fn excludes_forbidden_names() {
 
 #[test]
 fn respects_generation_strategy() {
-    let lexicon = InMemoryLexicon::default();
+    let lexicon = InMemoryLexicon;
     let service = NamingService::new(&lexicon);
 
     let mut input = criteria("architecture forme conception");
 
     input.strategy = Strategy::Composed;
-    let composed = service.generate(&input).unwrap();
+    let composed = service
+        .generate(&input)
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(
         composed
@@ -117,7 +121,9 @@ fn respects_generation_strategy() {
     );
 
     input.strategy = Strategy::Coined;
-    let coined = service.generate(&input).unwrap();
+    let coined = service
+        .generate(&input)
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(
         coined
@@ -128,12 +134,16 @@ fn respects_generation_strategy() {
 
 #[test]
 fn produces_deterministic_unique_sorted_results() {
-    let lexicon = InMemoryLexicon::default();
+    let lexicon = InMemoryLexicon;
     let service = NamingService::new(&lexicon);
     let input = criteria("architecture conception plans");
 
-    let first = service.generate(&input).unwrap();
-    let second = service.generate(&input).unwrap();
+    let first = service
+        .generate(&input)
+        .unwrap_or_else(|error| panic!("{error}"));
+    let second = service
+        .generate(&input)
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert_eq!(first, second);
 
@@ -156,23 +166,27 @@ fn produces_deterministic_unique_sorted_results() {
 
 #[test]
 fn returns_no_names_without_semantic_evidence() {
-    let lexicon = InMemoryLexicon::default();
+    let lexicon = InMemoryLexicon;
     let service = NamingService::new(&lexicon);
 
-    let results = service.generate(&criteria("xyzunrelatedword")).unwrap();
+    let results = service
+        .generate(&criteria("xyzunrelatedword"))
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(results.is_empty());
 }
 
 #[test]
 fn limits_number_of_results() {
-    let lexicon = InMemoryLexicon::default();
+    let lexicon = InMemoryLexicon;
     let service = NamingService::new(&lexicon);
 
     let mut input = criteria("conception plans bâtiments");
     input.limit = 3;
 
-    let results = service.generate(&input).unwrap();
+    let results = service
+        .generate(&input)
+        .unwrap_or_else(|error| panic!("{error}"));
 
     assert!(results.len() <= 3);
 }

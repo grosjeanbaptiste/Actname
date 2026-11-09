@@ -4,6 +4,7 @@ WORKDIR /application
 
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
+COPY resources ./resources
 
 RUN cargo build --locked --release
 

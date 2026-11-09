@@ -82,3 +82,21 @@ The initial implementation uses a finite semantic lexicon.
 It does not perform embedding similarity, trademark clearance, domain availability checks, or GitHub name availability checks.
 
 The coined-name classification describes the generation strategy and does not certify that a name is novel or unused.
+
+## Multilingual semantic knowledge base
+
+Actname supports deterministic lexical expansion across French,
+English, Dutch, Spanish and German.
+
+The embedded vocabulary is stored in `resources/semantic.tsv`.
+
+Each row contains a canonical concept and pipe-separated aliases.
+
+The semantic engine supports Unicode accent normalization,
+exact token matching, multilingual lexical equivalence and
+deterministic semantic expansion.
+
+Unknown concepts do not receive inferred semantic relationships.
+
+Future extensions may introduce external dictionaries,
+morphological analysis and contextual semantic similarity.
