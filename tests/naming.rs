@@ -190,3 +190,21 @@ fn limits_number_of_results() {
 
     assert!(results.len() <= 3);
 }
+
+#[test]
+fn names_git_repository_tooling() {
+    let lexicon = InMemoryLexicon;
+    let service = NamingService::new(&lexicon);
+
+    for context in [
+        "git repositories tooling",
+        "dépôt versioning outils logiciel",
+        "source code automation github",
+    ] {
+        let results = service
+            .generate(&criteria(context))
+            .unwrap_or_else(|error| panic!("{error}"));
+
+        assert!(!results.is_empty(), "no names for {context:?}");
+    }
+}

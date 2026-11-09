@@ -320,4 +320,49 @@ static ENTRIES: &[Lexeme] = &[
         ],
         form: Form::Composed,
     },
+    Lexeme {
+        suffix: "repo",
+        concepts: &["depots", "versioning", "code", "git", "gestion"],
+        form: Form::Composed,
+    },
+    Lexeme {
+        suffix: "git",
+        concepts: &["git", "depots", "versioning", "code", "outils"],
+        form: Form::Composed,
+    },
+    Lexeme {
+        suffix: "tool",
+        concepts: &["outils", "logiciel", "automatisation", "code", "gestion"],
+        form: Form::Composed,
+    },
+    Lexeme {
+        suffix: "kit",
+        concepts: &["outils", "logiciel", "code", "automatisation"],
+        form: Form::Composed,
+    },
+    Lexeme {
+        suffix: "flow",
+        concepts: &["automatisation", "versioning", "git", "code", "gestion"],
+        form: Form::Composed,
+    },
+    Lexeme {
+        suffix: "sync",
+        concepts: &["depots", "versioning", "git", "automatisation"],
+        form: Form::Composed,
+    },
+    Lexeme {
+        suffix: "branch",
+        concepts: &["git", "versioning", "code", "depots"],
+        form: Form::Composed,
+    },
+    Lexeme {
+        suffix: "commit",
+        concepts: &["git", "versioning", "code"],
+        form: Form::Composed,
+    },
+    Lexeme {
+        suffix: "vault",
+        concepts: &["depots", "code", "versioning", "logiciel"],
+        form: Form::Coined,
+    },
 ];
