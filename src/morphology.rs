@@ -172,6 +172,47 @@ fn stems(root: &str) -> Vec<(String, String)> {
     variants.into_iter().collect()
 }
 
+pub fn morphological_quality(candidate: &MorphologicalCandidate) -> u8 {
+    let mut quality: i32 = 100;
+
+    for transformation in &candidate.transformations {
+        if transformation.starts_with("root_truncation:") {
+            let preserved = transformation
+                .split_once(':')
+                .and_then(|(_, value)| value.parse::<usize>().ok())
+                .unwrap_or(0);
+
+            let root_length = candidate.root.len();
+
+            let preservation = preserved
+                .saturating_mul(100)
+                .checked_div(root_length)
+                .unwrap_or(0);
+
+            let penalty = match preservation {
+                0..=39 => 35,
+                40..=59 => 25,
+                60..=79 => 15,
+                _ => 8,
+            };
+
+            quality -= penalty;
+        } else if transformation.starts_with("suffix_removal:") {
+            quality -= 8;
+        } else if transformation.starts_with("prefix_removal:") {
+            quality -= 10;
+        } else if transformation == "architectural_contraction" {
+            quality -= 3;
+        } else if transformation == "boundary_deduplication" {
+            quality -= 0;
+        } else {
+            quality -= 15;
+        }
+    }
+
+    quality.clamp(0, 100) as u8
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

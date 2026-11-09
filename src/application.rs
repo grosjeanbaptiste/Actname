@@ -4,7 +4,9 @@ use crate::domain::{
     Candidate, Form, Lexicon, NamingCriteria, NamingError, Strategy, evaluate, evaluate_matches,
     semantic_tokens,
 };
-use crate::morphology::{MorphologicalGenerator, MorphologicalRequest, MorphologicalStrategy};
+use crate::morphology::{
+    MorphologicalGenerator, MorphologicalRequest, MorphologicalStrategy, morphological_quality,
+};
 
 pub struct NamingService<'a, L: Lexicon> {
     lexicon: &'a L,
@@ -153,10 +155,19 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
                     .collect::<BTreeSet<_>>()
                     .len();
 
-                evaluate_matches(&candidate.name, form, matches).map(|score| Candidate {
-                    name: candidate.name,
-                    form,
-                    score,
+                evaluate_matches(&candidate.name, form, matches).map(|mut score| {
+                    let quality = morphological_quality(&candidate);
+
+                    let adjusted =
+                        (u16::from(score.total) * 75 + u16::from(quality) * 25 + 50) / 100;
+
+                    score.total = adjusted.min(100) as u8;
+
+                    Candidate {
+                        name: candidate.name,
+                        form,
+                        score,
+                    }
                 })
             })
             .collect()
