@@ -1,6 +1,7 @@
 pub mod application;
 pub mod domain;
 pub mod infrastructure;
+pub mod morphology;
 pub mod semantics;
 
 pub use application::NamingService;

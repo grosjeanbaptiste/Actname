@@ -100,3 +100,30 @@ Unknown concepts do not receive inferred semantic relationships.
 
 Future extensions may introduce external dictionaries,
 morphological analysis and contextual semantic similarity.
+
+## Morphological generation
+
+Actname provides a deterministic morphological generation API.
+
+The module `actname::morphology` supports:
+
+- Arbitrary lexical roots
+- Prefix-based composition
+- Boundary-character deduplication
+- Prefix and suffix removal
+- Root truncation
+- Morphological contractions
+- Candidate provenance
+- Duplicate elimination
+- Maximum-length constraints
+- Exclusion lists
+- Composed, coined and hybrid strategies
+
+The morphological generator is independent from the existing
+semantic ranking pipeline.
+
+The next iteration will integrate generated candidates into
+semantic scoring and the CLI.
+
+The implementation is rule-based and does not claim linguistic
+validity or trademark availability.
