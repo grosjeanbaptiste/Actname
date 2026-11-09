@@ -67,7 +67,7 @@ fn english_legal_domain_matches_law() {
 fn english_sports_domain_matches_tracking() {
     let results = generate("sports performance tracking");
 
-    assert!(results.contains(&"acttrack".to_string()));
+    assert!(results.contains(&"actrack".to_string()));
 }
 
 #[test]

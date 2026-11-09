@@ -2,6 +2,65 @@
 
 Actname is a deterministic, offline-first semantic naming engine written in Rust.
 
+## API
+
+### Command line
+
+```text
+actname generate --prefix <p>... --domain "<words>" [--max-length n] [--limit n]
+                 [--strategy hybrid|composed|coined] [--exclude <name>]... [--format text|json]
+actname --help
+```
+
+| Option | Required | Default | Meaning |
+|---|---|---|---|
+| `--prefix` | yes, repeatable | – | Every name starts with one of these. Lowercase ASCII letters only. |
+| `--domain` | yes | – | Words describing the subject, any of French, English, Dutch, Spanish, German. |
+| `--max-length` | no | `10` | Longest name, must exceed at least one prefix length. |
+| `--limit` | no | `20` | Number of names returned, must be positive. |
+| `--strategy` | no | `hybrid` | `composed`, `coined` or both (`hybrid`). |
+| `--exclude` | no, repeatable | – | Names never returned. |
+| `--format` | no | `text` | `text` (table) or `json`. |
+
+Names come back ranked best first, deterministically: same input, same output.
+
+JSON output is an array, one object per name (`score` fields are integers 0–100):
+
+```json
+[{"name":"actarch","form":"coined",
+  "score":{"semantic":52,"readability":93,"originality":89,"total":74},
+  "provenance":{"concepts":["architecture"],"transformations":["root_truncation:4"]}}]
+```
+
+Exit code `0` on success. Exit code `1` with the reason on stderr (for example
+`semantic context is required`) when an option is missing, unknown or invalid.
+
+### Library
+
+```rust
+use actname::{InMemoryLexicon, NamingCriteria, NamingService, Strategy};
+
+let criteria = NamingCriteria {
+    prefixes: vec!["act".into()],
+    context: "architecture".into(),
+    max_length: 10,
+    limit: 5,
+    strategy: Strategy::Hybrid,
+    exclusions: vec![],
+};
+let names = NamingService::new(&InMemoryLexicon).generate(&criteria)?; // Vec<Candidate>
+assert!(names.iter().all(|c| c.name.starts_with("act")));
+# Ok::<(), actname::NamingError>(())
+```
+
+`Candidate` carries `name`, `form`, `score` and `provenance`. Invalid criteria
+return `NamingError`. The `Lexicon` trait lets a caller supply its own vocabulary.
+
+### Not in scope
+
+Whether a name is free on GitHub, as a domain or as a trademark is not decided
+here. A caller that needs it checks the candidates itself.
+
 ## Features
 
 - Required prefixes
@@ -70,10 +129,14 @@ cargo run -- generate \
 The ranking uses three weighted heuristic criteria:
 
 - Semantic relevance: 45%
-- Readability: 30%
-- Originality: 25%
+- Phonotactic readability: 30%
+- Morphological originality: 25%
 
 These scores are deterministic estimates, not validated linguistic measurements.
+Readability considers difficult consonant clusters and repeated letters; valid
+names are not penalized merely for being longer than seven characters.
+Coined-name originality is adjusted using the transformations used to form it,
+so meaningful recompositions can score above simple truncations.
 
 ## Limitations
 
@@ -113,6 +176,7 @@ The module `actname::morphology` supports:
 - Prefix and suffix removal
 - Root truncation
 - Morphological contractions
+- Linking vowels and root recomposition
 - Candidate provenance
 - Duplicate elimination
 - Maximum-length constraints
@@ -151,3 +215,13 @@ The integrated pipeline preserves:
 
 Morphological candidates are integrated before global ranking,
 deduplication and result truncation.
+Each returned candidate exposes its source concepts and transformations through
+`Candidate::provenance`; JSON output includes the same information under
+`provenance.concepts` and `provenance.transformations`.
+
+Coined names are intentionally allowed to be artificial. For example,
+`actetecture` can be traced to `architecture` through prefix removal and the
+addition of a linking vowel, and is evaluated for sound and transformation
+quality rather than penalized for not being a conventional word.
+`acteble` links the `capacite` concept to the coined suffix `ble`, while
+`actrack` records the shared-boundary fusion of `act` and `track`.

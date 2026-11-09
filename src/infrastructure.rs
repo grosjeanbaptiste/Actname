@@ -304,6 +304,11 @@ static ENTRIES: &[Lexeme] = &[
         form: Form::Composed,
     },
     Lexeme {
+        suffix: "ble",
+        concepts: &["capacite"],
+        form: Form::Coined,
+    },
+    Lexeme {
         suffix: "predict",
         concepts: &[
             "prediction",

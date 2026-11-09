@@ -117,18 +117,49 @@ fn render_json(candidates: &[Candidate]) {
         };
 
         println!(
-            "  {{\"name\":\"{}\",\"form\":\"{}\",\"score\":{{\"semantic\":{},\"readability\":{},\"originality\":{},\"total\":{}}}}}{}",
+            "  {{\"name\":\"{}\",\"form\":\"{}\",\"score\":{{\"semantic\":{},\"readability\":{},\"originality\":{},\"total\":{}}},\"provenance\":{{\"concepts\":[{}],\"transformations\":[{}]}}}}{}",
             candidate.name,
             candidate.form.as_str(),
             candidate.score.semantic,
             candidate.score.readability,
             candidate.score.originality,
             candidate.score.total,
+            json_array(&candidate.provenance.concepts),
+            json_array(&candidate.provenance.transformations),
             separator
         );
     }
 
     println!("]");
+}
+
+fn json_array(values: &[String]) -> String {
+    values
+        .iter()
+        .map(|value| json_string(value))
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+fn json_string(value: &str) -> String {
+    let mut escaped = String::from("\"");
+
+    for character in value.chars() {
+        match character {
+            '"' => escaped.push_str("\\\""),
+            '\\' => escaped.push_str("\\\\"),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            character if character <= '\u{001f}' => {
+                escaped.push_str(&format!("\\u{:04x}", character as u32));
+            }
+            character => escaped.push(character),
+        }
+    }
+
+    escaped.push('"');
+    escaped
 }
 
 fn run() -> Result<(), String> {

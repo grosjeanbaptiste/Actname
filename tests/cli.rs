@@ -35,6 +35,8 @@ fn cli_supports_json_output() {
             "act",
             "--domain",
             "architecture",
+            "--max-length",
+            "12",
             "--format",
             "json",
         ])
@@ -48,6 +50,10 @@ fn cli_supports_json_output() {
     assert!(stdout.starts_with('['));
     assert!(stdout.contains("\"name\""));
     assert!(stdout.contains("\"score\""));
+    assert!(stdout.contains("\"provenance\""));
+    assert!(stdout.contains("\"name\":\"actetecture\""));
+    assert!(stdout.contains("\"concepts\":[\"architecture\"]"));
+    assert!(stdout.contains("\"linking_vowel:e\""));
 }
 
 #[test]

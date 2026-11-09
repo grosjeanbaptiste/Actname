@@ -1,8 +1,8 @@
 use std::collections::BTreeSet;
 
 use crate::domain::{
-    Candidate, Form, Lexicon, NamingCriteria, NamingError, Strategy, evaluate, evaluate_matches,
-    semantic_tokens,
+    Candidate, CandidateProvenance, Form, Lexicon, NamingCriteria, NamingError, Strategy, evaluate,
+    evaluate_matches, semantic_tokens,
 };
 use crate::morphology::{
     MorphologicalGenerator, MorphologicalRequest, MorphologicalStrategy, morphological_quality,
@@ -68,7 +68,7 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
                     continue;
                 }
 
-                let name = format!("{prefix}{}", lexeme.suffix);
+                let (name, fused) = crate::morphology::fuse(prefix, lexeme.suffix);
 
                 if name.len() > criteria.max_length
                     || !name.chars().all(|character| character.is_ascii_lowercase())
@@ -78,10 +78,31 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
                 }
 
                 if let Some(score) = evaluate(&name, lexeme, context) {
+                    let concepts = lexeme
+                        .concepts
+                        .iter()
+                        .filter(|concept| context.contains(&crate::domain::normalize(concept)))
+                        .map(|concept| crate::domain::normalize(concept))
+                        .collect::<BTreeSet<_>>()
+                        .into_iter()
+                        .collect();
+                    let transformations = if fused {
+                        vec!["boundary_deduplication".into()]
+                    } else {
+                        vec![
+                            "prefix_suffix_composition".into(),
+                            format!("lexical_suffix:{}", lexeme.suffix),
+                        ]
+                    };
+
                     candidates.push(Candidate {
                         name,
                         form: lexeme.form,
                         score,
+                        provenance: CandidateProvenance {
+                            concepts,
+                            transformations,
+                        },
                     });
                 }
             }
@@ -158,15 +179,21 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
                 evaluate_matches(&candidate.name, form, matches).map(|mut score| {
                     let quality = morphological_quality(&candidate);
 
-                    let adjusted =
-                        (u16::from(score.total) * 75 + u16::from(quality) * 25 + 50) / 100;
-
-                    score.total = adjusted.min(100) as u8;
+                    if form == Form::Coined {
+                        score.originality =
+                            ((u16::from(score.originality) * 55 + u16::from(quality) * 45 + 50)
+                                / 100) as u8;
+                        score.recalculate_total();
+                    }
 
                     Candidate {
                         name: candidate.name,
                         form,
                         score,
+                        provenance: CandidateProvenance {
+                            concepts: vec![candidate.root],
+                            transformations: candidate.transformations,
+                        },
                     }
                 })
             })

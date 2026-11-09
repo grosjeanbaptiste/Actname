@@ -61,7 +61,7 @@ impl MorphologicalGenerator {
                 }
 
                 if request.strategy != MorphologicalStrategy::Composed {
-                    for (stem, transformation) in stems(&normalized) {
+                    for (stem, transformations) in stems(&normalized) {
                         Self::insert(
                             &mut candidates,
                             request,
@@ -69,7 +69,7 @@ impl MorphologicalGenerator {
                             &normalized,
                             &stem,
                             MorphologicalStrategy::Coined,
-                            vec![transformation],
+                            transformations,
                         );
                     }
                 }
@@ -119,7 +119,7 @@ fn valid_word(value: &str) -> bool {
     !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_lowercase())
 }
 
-fn fuse(prefix: &str, stem: &str) -> (String, bool) {
+pub(crate) fn fuse(prefix: &str, stem: &str) -> (String, bool) {
     let overlap = prefix
         .as_bytes()
         .last()
@@ -133,7 +133,7 @@ fn fuse(prefix: &str, stem: &str) -> (String, bool) {
     }
 }
 
-fn stems(root: &str) -> Vec<(String, String)> {
+fn stems(root: &str) -> Vec<(String, Vec<String>)> {
     let mut variants = BTreeMap::new();
 
     for suffix in [
@@ -142,7 +142,7 @@ fn stems(root: &str) -> Vec<(String, String)> {
     ] {
         if let Some(stem) = root.strip_suffix(suffix) {
             if stem.len() >= 3 {
-                variants.insert(stem.to_owned(), format!("suffix_removal:{suffix}"));
+                variants.insert(stem.to_owned(), vec![format!("suffix_removal:{suffix}")]);
             }
         }
     }
@@ -152,19 +152,26 @@ fn stems(root: &str) -> Vec<(String, String)> {
     ] {
         if let Some(stem) = root.strip_prefix(prefix) {
             if stem.len() >= 3 {
-                variants.insert(stem.to_owned(), format!("prefix_removal:{prefix}"));
+                variants.insert(stem.to_owned(), vec![format!("prefix_removal:{prefix}")]);
+
+                if !stem.starts_with('e') {
+                    variants.insert(
+                        format!("e{stem}"),
+                        vec![format!("prefix_removal:{prefix}"), "linking_vowel:e".into()],
+                    );
+                }
             }
         }
     }
 
     if root == "architecture" {
-        variants.insert("ecture".into(), "architectural_contraction".into());
+        variants.insert("ecture".into(), vec!["architectural_contraction".into()]);
     }
 
     if root.len() >= 7 {
         for length in [4, 5, 6, 7] {
             if let Some(stem) = root.get(..length) {
-                variants.insert(stem.to_owned(), format!("root_truncation:{length}"));
+                variants.insert(stem.to_owned(), vec![format!("root_truncation:{length}")]);
             }
         }
     }
@@ -173,7 +180,7 @@ fn stems(root: &str) -> Vec<(String, String)> {
 }
 
 pub fn morphological_quality(candidate: &MorphologicalCandidate) -> u8 {
-    let mut quality: i32 = 100;
+    let mut quality: i32 = 70;
 
     for transformation in &candidate.transformations {
         if transformation.starts_with("root_truncation:") {
@@ -189,28 +196,28 @@ pub fn morphological_quality(candidate: &MorphologicalCandidate) -> u8 {
                 .checked_div(root_length)
                 .unwrap_or(0);
 
-            let penalty = match preservation {
-                0..=39 => 35,
-                40..=59 => 25,
-                60..=79 => 15,
-                _ => 8,
-            };
-
-            quality -= penalty;
-        } else if transformation.starts_with("suffix_removal:") {
-            quality -= 8;
-        } else if transformation.starts_with("prefix_removal:") {
-            quality -= 10;
+            quality += 15 + preservation as i32 / 10;
+        } else if transformation.starts_with("suffix_removal:")
+            || transformation.starts_with("prefix_removal:")
+        {
+            quality += 12;
         } else if transformation == "architectural_contraction" {
-            quality -= 3;
+            quality += 28;
+        } else if transformation.starts_with("linking_vowel:") {
+            quality += 10;
         } else if transformation == "boundary_deduplication" {
-            quality -= 0;
+            quality += 20;
         } else {
-            quality -= 15;
+            quality += 8;
         }
     }
 
-    quality.clamp(0, 100) as u8
+    if candidate.transformations.is_empty() {
+        100
+    } else {
+        quality += candidate.transformations.len().saturating_sub(1) as i32 * 5;
+        quality.clamp(0, 100) as u8
+    }
 }
 
 #[cfg(test)]
@@ -241,6 +248,31 @@ mod tests {
             stems("architecture")
                 .iter()
                 .any(|(stem, _)| stem == "ecture")
+        );
+    }
+
+    #[test]
+    fn derives_linked_architectural_neologism() {
+        let request = MorphologicalRequest {
+            roots: vec!["architecture".into()],
+            prefixes: vec!["act".into()],
+            max_length: 20,
+            limit: usize::MAX,
+            strategy: MorphologicalStrategy::Coined,
+            exclusions: Vec::new(),
+        };
+
+        let candidate = MorphologicalGenerator
+            .generate(&request)
+            .into_iter()
+            .find(|candidate| candidate.name == "actetecture");
+        let Some(candidate) = candidate else {
+            panic!("linked architectural neologism should be generated");
+        };
+
+        assert_eq!(
+            candidate.transformations,
+            ["prefix_removal:archi", "linking_vowel:e"]
         );
     }
 

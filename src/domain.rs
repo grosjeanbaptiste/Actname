@@ -122,6 +122,13 @@ pub struct Candidate {
     pub name: String,
     pub form: Form,
     pub score: Score,
+    pub provenance: CandidateProvenance,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CandidateProvenance {
+    pub concepts: Vec<String>,
+    pub transformations: Vec<String>,
 }
 
 pub fn normalize(value: &str) -> String {
@@ -163,7 +170,7 @@ pub fn evaluate_matches(name: &str, form: Form, matches: usize) -> Option<Score>
 
     let semantic = (40 + (matches as u64).saturating_mul(12)).min(100) as u8;
 
-    let length_penalty = name.len().saturating_sub(7) as i32 * 3;
+    let length_penalty = name.len().saturating_sub(12) as i32 * 2;
 
     let consonant_penalty = name
         .as_bytes()
@@ -194,12 +201,23 @@ pub fn evaluate_matches(name: &str, form: Form, matches: usize) -> Option<Score>
     let weighted =
         u16::from(semantic) * 45 + u16::from(readability) * 30 + u16::from(originality) * 25;
 
-    let total = ((weighted + 50) / 100) as u8;
-
-    Some(Score {
+    let mut score = Score {
         semantic,
         readability,
         originality,
-        total,
-    })
+        total: ((weighted + 50) / 100) as u8,
+    };
+    score.recalculate_total();
+
+    Some(score)
+}
+
+impl Score {
+    pub(crate) fn recalculate_total(&mut self) {
+        let weighted = u16::from(self.semantic) * 45
+            + u16::from(self.readability) * 30
+            + u16::from(self.originality) * 25;
+
+        self.total = ((weighted + 50) / 100) as u8;
+    }
 }
