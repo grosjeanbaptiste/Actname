@@ -1,7 +1,10 @@
 use std::env;
 use std::process::ExitCode;
 
-use actname::{Candidate, InMemoryLexicon, NamingCriteria, NamingService, Strategy};
+use actname::lexicon::TextLexicon;
+use actname::scoring::ScoringModel;
+use actname::semantics::SemanticKnowledgeBase;
+use actname::{Candidate, InMemoryLexicon, Lexicon, NamingCriteria, NamingService, Strategy};
 
 #[derive(Clone, Copy)]
 enum OutputFormat {
@@ -9,13 +12,21 @@ enum OutputFormat {
     Json,
 }
 
+#[derive(Default)]
+struct DataFiles {
+    lexicon: Option<String>,
+    scoring: Option<String>,
+    semantics: Option<String>,
+}
+
 struct CliOptions {
     criteria: NamingCriteria,
     format: OutputFormat,
+    files: DataFiles,
 }
 
 fn usage() -> &'static str {
-    "actname generate --prefix act --prefix acte --domain \"architecture plans\" [--max-length 10] [--limit 20] [--strategy hybrid|composed|coined] [--exclude NAME] [--format text|json]"
+    "actname generate --prefix act --prefix acte --domain \"architecture plans\" [--max-length 10] [--limit 20] [--strategy hybrid|composed|coined] [--exclude NAME] [--format text|json] [--lexicon FILE] [--scoring FILE] [--semantics FILE]"
 }
 
 fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String> {
@@ -34,6 +45,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String>
     let mut strategy = Strategy::Hybrid;
     let mut exclusions = Vec::new();
     let mut format = OutputFormat::Text;
+    let mut files = DataFiles::default();
 
     let mut arguments = arguments.into_iter().skip(1);
 
@@ -64,6 +76,9 @@ fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String>
                 };
             }
             "--exclude" => exclusions.push(value),
+            "--lexicon" => files.lexicon = Some(value),
+            "--scoring" => files.scoring = Some(value),
+            "--semantics" => files.semantics = Some(value),
             "--format" => {
                 format = match value.as_str() {
                     "text" => OutputFormat::Text,
@@ -85,6 +100,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String>
             exclusions,
         },
         format,
+        files,
     }))
 }
 
@@ -162,6 +178,30 @@ fn json_string(value: &str) -> String {
     escaped
 }
 
+fn read(path: &str) -> Result<String, String> {
+    std::fs::read_to_string(path).map_err(|error| format!("{path}: {error}"))
+}
+
+fn generate<L: Lexicon>(lexicon: &L, options: &CliOptions) -> Result<Vec<Candidate>, String> {
+    let mut service = NamingService::new(lexicon);
+
+    if let Some(path) = &options.files.scoring {
+        let model =
+            ScoringModel::from_text(&read(path)?).map_err(|error| format!("{path}: {error}"))?;
+        service = service.with_model(model);
+    }
+
+    if let Some(path) = &options.files.semantics {
+        let base = SemanticKnowledgeBase::from_tsv(&read(path)?)
+            .map_err(|error| format!("{path}: {error}"))?;
+        service = service.with_knowledge(base);
+    }
+
+    service
+        .generate(&options.criteria)
+        .map_err(|error| error.to_string())
+}
+
 fn run() -> Result<(), String> {
     let arguments: Vec<String> = env::args().skip(1).collect();
 
@@ -170,12 +210,14 @@ fn run() -> Result<(), String> {
         return Ok(());
     };
 
-    let lexicon = InMemoryLexicon;
-    let service = NamingService::new(&lexicon);
-
-    let candidates = service
-        .generate(&options.criteria)
-        .map_err(|error| error.to_string())?;
+    let candidates = match &options.files.lexicon {
+        Some(path) => {
+            let lexicon =
+                TextLexicon::from_text(&read(path)?).map_err(|error| format!("{path}: {error}"))?;
+            generate(&lexicon, &options)?
+        }
+        None => generate(&InMemoryLexicon, &options)?,
+    };
 
     match options.format {
         OutputFormat::Text => render_text(&candidates),

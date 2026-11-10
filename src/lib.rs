@@ -1,7 +1,9 @@
 pub mod application;
 pub mod domain;
 pub mod infrastructure;
+pub mod lexicon;
 pub mod morphology;
+pub mod scoring;
 pub mod semantics;
 
 pub use application::NamingService;

@@ -1,26 +1,49 @@
 use std::collections::BTreeSet;
 
 use crate::domain::{
-    Candidate, CandidateProvenance, Form, Lexicon, NamingCriteria, NamingError, Strategy, evaluate,
-    evaluate_matches, semantic_tokens,
+    Candidate, CandidateProvenance, Form, Lexicon, NamingCriteria, NamingError, Strategy,
+    evaluate_matches_with, evaluate_with, semantic_tokens,
 };
 use crate::morphology::{
     MorphologicalGenerator, MorphologicalRequest, MorphologicalStrategy, morphological_quality,
 };
+use crate::scoring::ScoringModel;
+use crate::semantics::SemanticKnowledgeBase;
 
 pub struct NamingService<'a, L: Lexicon> {
     lexicon: &'a L,
+    model: ScoringModel,
+    knowledge: Option<SemanticKnowledgeBase>,
 }
 
 impl<'a, L: Lexicon> NamingService<'a, L> {
     pub fn new(lexicon: &'a L) -> Self {
-        Self { lexicon }
+        Self {
+            lexicon,
+            model: ScoringModel::default(),
+            knowledge: None,
+        }
+    }
+
+    /// Words are expanded to concepts with this base instead of the embedded one.
+    pub fn with_knowledge(mut self, knowledge: SemanticKnowledgeBase) -> Self {
+        self.knowledge = Some(knowledge);
+        self
+    }
+
+    pub fn with_model(mut self, model: ScoringModel) -> Self {
+        self.model = model;
+        self
     }
 
     pub fn generate(&self, criteria: &NamingCriteria) -> Result<Vec<Candidate>, NamingError> {
         criteria.validate()?;
+        self.model.validate().map_err(NamingError::Invalid)?;
 
-        let context = semantic_tokens(&criteria.context);
+        let context = match &self.knowledge {
+            Some(knowledge) => knowledge.expand(&criteria.context),
+            None => semantic_tokens(&criteria.context),
+        };
 
         let exclusions: BTreeSet<String> = criteria
             .exclusions
@@ -68,7 +91,7 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
                     continue;
                 }
 
-                let (name, fused) = crate::morphology::fuse(prefix, lexeme.suffix);
+                let (name, fused) = crate::morphology::fuse(prefix, &lexeme.suffix);
 
                 if name.len() > criteria.max_length
                     || !name.chars().all(|character| character.is_ascii_lowercase())
@@ -77,7 +100,7 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
                     continue;
                 }
 
-                if let Some(score) = evaluate(&name, lexeme, context) {
+                if let Some(score) = evaluate_with(&self.model, &name, lexeme, context) {
                     let concepts = lexeme
                         .concepts
                         .iter()
@@ -176,27 +199,36 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
                     .collect::<BTreeSet<_>>()
                     .len();
 
-                evaluate_matches(&candidate.name, form, matches).map(|mut score| {
-                    let quality = morphological_quality(&candidate);
+                evaluate_matches_with(&self.model, &candidate.name, form, matches).map(
+                    |mut score| {
+                        let quality = morphological_quality(&candidate);
 
-                    if form == Form::Coined {
-                        score.originality =
-                            ((u16::from(score.originality) * 55 + u16::from(quality) * 45 + 50)
-                                / 100) as u8;
-                        score.recalculate_total();
-                    }
+                        if form == Form::Coined {
+                            score.originality = self.blend_originality(score.originality, quality);
+                            score.recalculate_total(&self.model.weights);
+                        }
 
-                    Candidate {
-                        name: candidate.name,
-                        form,
-                        score,
-                        provenance: CandidateProvenance {
-                            concepts: vec![candidate.root],
-                            transformations: candidate.transformations,
-                        },
-                    }
-                })
+                        Candidate {
+                            name: candidate.name,
+                            form,
+                            score,
+                            provenance: CandidateProvenance {
+                                concepts: vec![candidate.root],
+                                transformations: candidate.transformations,
+                            },
+                        }
+                    },
+                )
             })
             .collect()
+    }
+
+    fn blend_originality(&self, form_value: u8, quality: u8) -> u8 {
+        let (wf, wq) = (
+            u32::from(self.model.coined_blend_form),
+            u32::from(self.model.coined_blend_quality),
+        );
+        let sum = (wf + wq).max(1);
+        ((u32::from(form_value) * wf + u32::from(quality) * wq + sum / 2) / sum) as u8
     }
 }
