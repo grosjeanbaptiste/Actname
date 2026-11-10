@@ -1,3 +1,4 @@
+use crate::scoring::{ScoringModel, Weights};
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fmt;
@@ -98,10 +99,10 @@ impl fmt::Display for NamingError {
 
 impl Error for NamingError {}
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lexeme {
-    pub suffix: &'static str,
-    pub concepts: &'static [&'static str],
+    pub suffix: String,
+    pub concepts: Vec<String>,
     pub form: Form,
 }
 
@@ -154,23 +155,44 @@ pub fn semantic_tokens(context: &str) -> BTreeSet<String> {
 }
 
 pub fn evaluate(name: &str, lexeme: &Lexeme, context: &BTreeSet<String>) -> Option<Score> {
+    evaluate_with(&ScoringModel::default(), name, lexeme, context)
+}
+
+pub fn evaluate_with(
+    model: &ScoringModel,
+    name: &str,
+    lexeme: &Lexeme,
+    context: &BTreeSet<String>,
+) -> Option<Score> {
     let matches = lexeme
         .concepts
         .iter()
         .filter(|concept| context.contains(&normalize(concept)))
         .count();
 
-    evaluate_matches(name, lexeme.form, matches)
+    evaluate_matches_with(model, name, lexeme.form, matches)
 }
 
 pub fn evaluate_matches(name: &str, form: Form, matches: usize) -> Option<Score> {
+    evaluate_matches_with(&ScoringModel::default(), name, form, matches)
+}
+
+pub fn evaluate_matches_with(
+    model: &ScoringModel,
+    name: &str,
+    form: Form,
+    matches: usize,
+) -> Option<Score> {
     if matches == 0 {
         return None;
     }
 
-    let semantic = (40 + (matches as u64).saturating_mul(12)).min(100) as u8;
+    let semantic = model
+        .semantic_base
+        .saturating_add((matches as u64).saturating_mul(model.semantic_per_match))
+        .min(100) as u8;
 
-    let length_penalty = name.len().saturating_sub(12) as i32 * 2;
+    let length_penalty = name.len().saturating_sub(model.length_free) as i32 * model.length_penalty;
 
     let consonant_penalty = name
         .as_bytes()
@@ -181,43 +203,33 @@ pub fn evaluate_matches(name: &str, form: Form, matches: usize) -> Option<Score>
                 .all(|byte| !matches!(*byte, b'a' | b'e' | b'i' | b'o' | b'u' | b'y'))
         })
         .count() as i32
-        * 7;
+        * model.consonant_penalty;
 
     let repetition_penalty = name
         .as_bytes()
         .windows(2)
         .filter(|window| window[0] == window[1])
         .count() as i32
-        * 6;
+        * model.repetition_penalty;
 
     let readability =
         (100 - length_penalty - consonant_penalty - repetition_penalty).clamp(0, 100) as u8;
 
     let originality = match form {
-        Form::Composed => 70,
-        Form::Coined => 90,
+        Form::Composed => model.originality_composed,
+        Form::Coined => model.originality_coined,
     };
 
-    let weighted =
-        u16::from(semantic) * 45 + u16::from(readability) * 30 + u16::from(originality) * 25;
-
-    let mut score = Score {
+    Some(Score {
         semantic,
         readability,
         originality,
-        total: ((weighted + 50) / 100) as u8,
-    };
-    score.recalculate_total();
-
-    Some(score)
+        total: model.weights.total(semantic, readability, originality),
+    })
 }
 
 impl Score {
-    pub(crate) fn recalculate_total(&mut self) {
-        let weighted = u16::from(self.semantic) * 45
-            + u16::from(self.readability) * 30
-            + u16::from(self.originality) * 25;
-
-        self.total = ((weighted + 50) / 100) as u8;
+    pub(crate) fn recalculate_total(&mut self, weights: &Weights) {
+        self.total = weights.total(self.semantic, self.readability, self.originality);
     }
 }

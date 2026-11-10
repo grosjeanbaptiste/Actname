@@ -34,6 +34,9 @@ actname --help
 | `--strategy` | no | `hybrid` | `composed`, `coined` or both (`hybrid`). |
 | `--exclude` | no, repeatable | – | Names never returned. |
 | `--format` | no | `text` | `text` (table) or `json`. |
+| `--lexicon` | no | `resources/lexicon.tsv` | Lexicon file replacing the embedded one. |
+| `--scoring` | no | built-in model | Scoring model file (weights, penalties). |
+| `--semantics` | no | `resources/semantic.tsv` | Word-to-concept file replacing the embedded one. |
 
 Names come back ranked best first, deterministically: same input, same output.
 
@@ -47,6 +50,41 @@ JSON output is an array, one object per name (`score` fields are integers 0–10
 
 Exit code `0` on success. Exit code `1` with the reason on stderr (for example
 `semantic context is required`) when an option is missing, unknown or invalid.
+
+### Data files
+
+Nothing the ranking depends on is fixed in the code; each file below replaces its embedded default.
+
+- **Lexicon** (`--lexicon`): one `suffix<TAB>composed|coined<TAB>concept|concept` per line, `#` comments.
+  Default: `resources/lexicon.tsv`.
+- **Semantics** (`--semantics`): one `concept<TAB>alias|alias|…` per line, in any language; a word of
+  `--domain` that matches an alias or concept selects that concept. Default: `resources/semantic.tsv`.
+- **Scoring** (`--scoring`): `key=value` lines over the defaults, `#` comments. Keys, with defaults:
+  `weight_semantic=45`, `weight_readability=30`, `weight_originality=25` (only the ratios matter),
+  `originality_composed=70`, `originality_coined=90`, `coined_blend_form=55`,
+  `coined_blend_quality=45`, `semantic_base=40`, `semantic_per_match=12`, `length_free=12`,
+  `length_penalty=2`, `consonant_penalty=7`, `repetition_penalty=6`.
+
+An unreadable or malformed file is an error naming the file and the line (exit code `1`).
+The defaults are written once, in `ScoringModel::default()`.
+
+```rust
+use actname::lexicon::TextLexicon;
+use actname::scoring::{ScoringModel, Weights};
+use actname::semantics::SemanticKnowledgeBase;
+use actname::{NamingCriteria, NamingService, Strategy};
+
+let lexicon = TextLexicon::from_text("zork\tcomposed\tarchitecture\n").unwrap();
+let knowledge = SemanticKnowledgeBase::from_tsv("architecture\tzorp\n").unwrap();
+let model = ScoringModel { weights: Weights { semantic: 1, readability: 1, originality: 1 }, ..ScoringModel::default() };
+let service = NamingService::new(&lexicon).with_knowledge(knowledge).with_model(model);
+let criteria = NamingCriteria {
+    prefixes: vec!["act".into()], context: "zorp".into(), max_length: 10,
+    limit: 5, strategy: Strategy::Composed, exclusions: vec![],
+};
+assert!(service.generate(&criteria)?.iter().any(|c| c.name == "actzork"));
+# Ok::<(), actname::NamingError>(())
+```
 
 ### Library
 
