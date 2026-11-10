@@ -20,7 +20,7 @@ From a checkout: `cargo install --locked --path .`. The binary is
 ### Command line
 
 ```text
-actname generate --prefix <p>... --domain "<words>" [--max-length n] [--limit n]
+actname generate --prefix <p>... [--domain "<words>"] [--readme <file>] [--max-length n] [--limit n]
                  [--strategy hybrid|composed|coined] [--exclude <name>]... [--format text|json]
 actname --help
 ```
@@ -28,7 +28,8 @@ actname --help
 | Option | Required | Default | Meaning |
 |---|---|---|---|
 | `--prefix` | yes, repeatable | – | Every name starts with one of these. Lowercase ASCII letters only. |
-| `--domain` | yes | – | Words describing the subject, any of French, English, Dutch, Spanish, German. |
+| `--domain` | yes, unless the README gives it | the repository's README | Words describing the subject, any of French, English, Dutch, Spanish, German. Without it, the context is the content of `README.md` in the current directory, when it holds text. An explicit `--domain` wins over the README. |
+| `--readme` | no | `README.md` | The file read as the context when `--domain` is absent. A file named here that does not exist, or any file that cannot be read, is an error; a missing default `README.md` is simply no context. |
 | `--max-length` | no | `10` | Longest name, must exceed at least one prefix length. |
 | `--limit` | no | `20` | Number of names returned, must be positive. |
 | `--strategy` | no | `hybrid` | `composed`, `coined` or both (`hybrid`). |
@@ -39,6 +40,13 @@ actname --help
 | `--semantics` | no | `resources/semantic.tsv` | Word-to-concept file replacing the embedded one. |
 
 Names come back ranked best first, deterministically: same input, same output.
+
+Inside a repository with a README, `--domain` can be left out: the README is the context.
+
+```text
+cd my-repo && actname generate --prefix act --limit 3
+```
+
 
 JSON output is an array, one object per name (`score` fields are integers 0–100):
 
