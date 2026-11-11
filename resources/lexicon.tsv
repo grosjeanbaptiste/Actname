@@ -34,3 +34,10 @@ sync	composed	depots|versioning|git|automatisation
 branch	composed	git|versioning|code|depots
 commit	composed	git|versioning|code
 vault	coined	depots|code|versioning|logiciel
+conf	composed	configuration|serveurs|machines|infrastructure|provisionnement|gestion
+host	composed	serveurs|machines|volumes|infrastructure|configuration|parc
+vol	composed	volumes|donnees|serveurs|machines|infrastructure|parc
+fleet	composed	parc|machines|serveurs|infrastructure|automatisation|gestion
+infra	composed	infrastructure|serveurs|machines|volumes|parc|provisionnement
+ops	composed	provisionnement|automatisation|serveurs|infrastructure|configuration|gestion
+keep	coined	secrets|configuration|volumes|serveurs|donnees|gestion

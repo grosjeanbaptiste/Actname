@@ -36,3 +36,10 @@ logiciel	logiciel|logiciels|software|programa|programas|programm|programma
 automatisation	automatisation|automation|automate|automating|automatizacion|automatisierung|automatisering
 gestion	gestion|management|manage|managing|gestionar|verwaltung|beheer
 git	git|github|gitlab|branch|branches|commit|commits|merge|clone|fork|pull|push
+configuration	configuration|configurations|config|configs|configure|configuring|setting|settings|reglage|reglages|parametre|parametres|instelling|instellingen|ajuste|ajustes|konfiguration|einstellung|einstellungen|dotfiles
+serveurs	serveur|serveurs|server|servers|host|hosts|hote|hotes|servidor|servidores|rechner|computeserver
+volumes	volume|volumes|disk|disks|disque|disques|storage|stockage|opslag|schijf|schijven|almacenamiento|disco|discos|speicher|partition|partitions|laufwerk
+infrastructure	infrastructure|infrastructures|infra|inventory|inventaire|inventories|inventario|inventaris|infraestructura|infrastruktur
+parc	parc|fleet|fleets|estate|flotte|vloot|flota|flotas|flotte|maschinenpark
+provisionnement	provisionnement|provisioning|provision|deploiement|deployment|deploy|deploying|installation|setup|inrichting|despliegue|bereitstellung
+secrets	secret|secrets|credential|credentials|identifiant|identifiants|token|tokens|geheim|geheimen|secreto|secretos|geheimnis|zugangsdaten
