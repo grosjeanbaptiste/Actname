@@ -230,9 +230,16 @@ fn generate<L: Lexicon>(lexicon: &L, options: &CliOptions) -> Result<Vec<Candida
         service = service.with_knowledge(base);
     }
 
-    service
+    let found = service
         .generate(&options.criteria)
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    if found.is_empty() {
+        return Err(format!(
+            "no name matches the context {:?}: its words may be unknown concepts (add some with --semantics and --lexicon)",
+            options.criteria.context
+        ));
+    }
+    Ok(found)
 }
 
 fn run() -> Result<(), String> {
