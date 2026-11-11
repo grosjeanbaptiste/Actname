@@ -1,6 +1,7 @@
 use std::env;
 use std::process::ExitCode;
 
+use actname::context::from_readme;
 use actname::lexicon::TextLexicon;
 use actname::scoring::ScoringModel;
 use actname::semantics::SemanticKnowledgeBase;
@@ -21,12 +22,14 @@ struct DataFiles {
 
 struct CliOptions {
     criteria: NamingCriteria,
+    /// Where the context comes from when `--domain` gives none.
+    readme: Option<String>,
     format: OutputFormat,
     files: DataFiles,
 }
 
 fn usage() -> &'static str {
-    "actname generate --prefix act --prefix acte --domain \"architecture plans\" [--max-length 10] [--limit 20] [--strategy hybrid|composed|coined] [--exclude NAME] [--format text|json] [--lexicon FILE] [--scoring FILE] [--semantics FILE]"
+    "actname generate --prefix act --prefix acte --domain \"architecture plans\" [--max-length 10] [--limit 20] [--strategy hybrid|composed|coined] [--exclude NAME] [--format text|json] [--lexicon FILE] [--scoring FILE] [--semantics FILE] [--readme FILE]"
 }
 
 fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String> {
@@ -46,6 +49,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String>
     let mut exclusions = Vec::new();
     let mut format = OutputFormat::Text;
     let mut files = DataFiles::default();
+    let mut readme = None;
 
     let mut arguments = arguments.into_iter().skip(1);
 
@@ -79,6 +83,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String>
             "--lexicon" => files.lexicon = Some(value),
             "--scoring" => files.scoring = Some(value),
             "--semantics" => files.semantics = Some(value),
+            "--readme" => readme = Some(value),
             "--format" => {
                 format = match value.as_str() {
                     "text" => OutputFormat::Text,
@@ -99,6 +104,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String>
             strategy,
             exclusions,
         },
+        readme,
         format,
         files,
     }))
@@ -182,6 +188,33 @@ fn read(path: &str) -> Result<String, String> {
     std::fs::read_to_string(path).map_err(|error| format!("{path}: {error}"))
 }
 
+const DEFAULT_README: &str = "README.md";
+
+/// Without `--domain`, the context is the repository's README when it holds text. A README that
+/// is absent by default is no context; an explicit `--readme` that is absent, or any README that
+/// cannot be read, is an error.
+fn resolve_context(options: &mut CliOptions) -> Result<(), String> {
+    if !options.criteria.context.trim().is_empty() {
+        return Ok(());
+    }
+    let path = options.readme.as_deref().unwrap_or(DEFAULT_README);
+    match std::fs::read_to_string(path) {
+        Ok(text) => {
+            if let Some(context) = from_readme(&text) {
+                options.criteria.context = context;
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound && options.readme.is_none() => {}
+        Err(error) => return Err(format!("{path}: {error}")),
+    }
+    if options.criteria.context.trim().is_empty() {
+        return Err(format!(
+            "semantic context is required: pass --domain, or run in a repository with a non-empty {path}"
+        ));
+    }
+    Ok(())
+}
+
 fn generate<L: Lexicon>(lexicon: &L, options: &CliOptions) -> Result<Vec<Candidate>, String> {
     let mut service = NamingService::new(lexicon);
 
@@ -205,10 +238,11 @@ fn generate<L: Lexicon>(lexicon: &L, options: &CliOptions) -> Result<Vec<Candida
 fn run() -> Result<(), String> {
     let arguments: Vec<String> = env::args().skip(1).collect();
 
-    let Some(options) = parse_arguments(arguments)? else {
+    let Some(mut options) = parse_arguments(arguments)? else {
         println!("{}", usage());
         return Ok(());
     };
+    resolve_context(&mut options)?;
 
     let candidates = match &options.files.lexicon {
         Some(path) => {
