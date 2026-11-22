@@ -130,3 +130,10 @@ alert	composed	alert
 ping	composed	alert
 access	composed	a11y
 chain	composed	blockchain
+conf	composed	configuration|serveurs|machines|infrastructure|provisionnement|gestion
+host	composed	serveurs|machines|volumes|infrastructure|configuration|parc
+vol	composed	volumes|donnees|serveurs|machines|infrastructure|parc
+fleet	composed	parc|machines|serveurs|infrastructure|automatisation|gestion
+infra	composed	infrastructure|serveurs|machines|volumes|parc|provisionnement
+ops	composed	provisionnement|automatisation|serveurs|infrastructure|configuration|gestion
+keep	coined	secrets|configuration|volumes|serveurs|donnees|gestion
