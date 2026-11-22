@@ -220,6 +220,12 @@ deterministic semantic expansion.
 
 Unknown concepts do not receive inferred semantic relationships.
 
+About 50 categories of utilities and tools are covered in English and French
+(terminal, build, testing, security, database, media, maps, ...);
+`tests/coverage.rs` lists them. A context none of whose words is known gives no
+name: `actname` then exits with `no name matches the context ...` instead of
+printing an empty table. Add words with `--semantics` and `--lexicon`.
+
 Future extensions may introduce external dictionaries,
 morphological analysis and contextual semantic similarity.
 
