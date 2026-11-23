@@ -61,7 +61,7 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
             .collect();
 
         let mut candidates = if criteria.strategy == Strategy::Statistical {
-            self.statistical_candidates(criteria, &context, &exclusions)
+            self.statistical_candidates(criteria, &exclusions)
         } else {
             let mut found = self.lexical_candidates(criteria, &context, &exclusions);
             found.extend(self.morphological_candidates(criteria, &context));
@@ -91,14 +91,14 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
     fn statistical_candidates(
         &self,
         criteria: &NamingCriteria,
-        context: &BTreeSet<String>,
         exclusions: &BTreeSet<String>,
     ) -> Vec<Candidate> {
         let knowledge = self
             .knowledge
             .as_ref()
             .unwrap_or_else(|| crate::semantics::default_knowledge_base());
-        let anchors = knowledge.words_of(context);
+        let weights = knowledge.expand_weighted(&criteria.context);
+        let anchors = knowledge.weighted_words(&weights);
         if anchors.is_empty() {
             return Vec::new();
         }
@@ -111,13 +111,20 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
                 }
                 let suffix = &name[prefix.len()..];
                 let concepts: BTreeSet<String> = anchors
-                    .iter()
+                    .keys()
                     .filter(|word| shares_three_letters(suffix, word))
                     .flat_map(|word| knowledge.concepts_for(word))
-                    .filter(|concept| context.contains(concept))
+                    .filter(|concept| weights.contains_key(concept))
                     .collect();
+                // A name rooted in the request's own words scores like three concepts,
+                // one rooted in its category like two, in its context like one.
+                let closest = concepts
+                    .iter()
+                    .filter_map(|concept| weights.get(concept))
+                    .max()
+                    .map_or(0, |weight| usize::from(*weight));
                 if let Some(score) =
-                    evaluate_matches_with(&self.model, &name, Form::Coined, concepts.len())
+                    evaluate_matches_with(&self.model, &name, Form::Coined, closest)
                 {
                     candidates.push(Candidate {
                         name,

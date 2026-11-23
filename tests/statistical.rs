@@ -87,3 +87,60 @@ fn excluded_names_never_come_back() {
     let again = service.generate(&c).unwrap_or_else(|e| panic!("{e}"));
     assert!(again.iter().all(|x| x.name != all[0]));
 }
+
+/// Same words, with the classes of the LL base: the category and the context of each sense.
+const CLASSED: &str = "croc\tcrocodile|krokodil|crocodilo\tanimal\tswamp\n\
+                       animal\tanimal|tier|animale\n\
+                       swamp\tswamp|sumpf|marais\n";
+
+fn classed(context: &str) -> Vec<String> {
+    let knowledge = SemanticKnowledgeBase::from_tsv(CLASSED).unwrap_or_else(|e| panic!("{e}"));
+    let service = NamingService::new(&InMemoryLexicon).with_knowledge(knowledge);
+    let mut c = criteria(context);
+    c.limit = 60;
+    service
+        .generate(&c)
+        .unwrap_or_else(|e| panic!("{e}"))
+        .into_iter()
+        .map(|c| c.name)
+        .collect()
+}
+
+#[test]
+fn the_category_of_a_sense_also_steers_the_letters() {
+    // « crocodile » ne contient pas « tier » ni « animal » : seule la catégorie les apporte.
+    let found = classed("crocodile");
+    assert!(
+        found.iter().any(|n| {
+            let suffix = &n[3..];
+            suffix.len() >= 3
+                && ["animal", "tier", "animale"]
+                    .iter()
+                    .any(|w| w.contains(suffix))
+        }),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn the_context_of_a_sense_also_steers_the_letters() {
+    let found = classed("crocodile");
+    assert!(
+        found.iter().any(|n| {
+            let suffix = &n[3..];
+            suffix.len() >= 3
+                && ["swamp", "sumpf", "marais"]
+                    .iter()
+                    .any(|w| w.contains(suffix))
+        }),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn the_request_word_ranks_above_its_category_and_its_context() {
+    let found = classed("crocodile");
+    let rank = |part: &str| found.iter().position(|n| n[3..].contains(part));
+    assert!(rank("croc") < rank("tier"), "{found:?}");
+    assert!(rank("tier") < rank("sumpf"), "{found:?}");
+}

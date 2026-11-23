@@ -10,13 +10,16 @@
 //! the letter after the last two, plus `BIAS` when the suffix built so far
 //! occurs inside a word of the request's concepts.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+
+use crate::semantics::DIRECT;
 
 /// Shortest suffix that may stand as a name part.
 const MIN_SUFFIX: usize = 3;
 /// Sequences kept at each step.
 const BEAM: usize = 256;
-/// Bonus per letter while the suffix stays inside a word of the request.
+/// Bonus per letter while the suffix stays inside a word of the request,
+/// scaled by the word's weight (`DIRECT` gives the whole bonus).
 const BIAS: i64 = 1000;
 const END: char = '$';
 const START: char = '^';
@@ -58,7 +61,7 @@ impl LetterModel {
     pub fn names(
         &self,
         prefix: &str,
-        anchors: &BTreeSet<String>,
+        anchors: &BTreeMap<String, u8>,
         max_length: usize,
     ) -> Vec<String> {
         let mut beam: Vec<(i64, String)> = vec![(0, String::new())];
@@ -83,11 +86,17 @@ impl LetterModel {
                     }
                     let mut longer = suffix.clone();
                     longer.push(letter);
-                    let bias = if longer.len() >= 2 && anchors.iter().any(|w| w.contains(&longer)) {
-                        BIAS
+                    let weight = if longer.len() >= 2 {
+                        anchors
+                            .iter()
+                            .filter(|(word, _)| word.contains(&longer))
+                            .map(|(_, weight)| i64::from(*weight))
+                            .max()
+                            .unwrap_or(0)
                     } else {
                         0
                     };
+                    let bias = BIAS * weight / i64::from(DIRECT);
                     grown.push((score + step + bias, longer));
                 }
             }
@@ -111,8 +120,8 @@ impl LetterModel {
 mod tests {
     use super::*;
 
-    fn anchors(words: &[&str]) -> BTreeSet<String> {
-        words.iter().map(|w| w.to_string()).collect()
+    fn anchors(words: &[&str]) -> BTreeMap<String, u8> {
+        words.iter().map(|w| (w.to_string(), DIRECT)).collect()
     }
 
     #[test]
@@ -129,6 +138,17 @@ mod tests {
         let toward_forest = model.names("act", &anchors(&["forest"]), 8);
         assert_ne!(toward_motor, toward_forest);
         assert_eq!(toward_motor.first().map(String::as_str), Some("actmotor"));
+    }
+
+    #[test]
+    fn a_word_of_the_request_pulls_harder_than_a_word_of_its_category() {
+        let model = LetterModel::train(["motor", "forest"]);
+        let mut weights = anchors(&["motor"]);
+        weights.insert("forest".into(), 2);
+        let names = model.names("act", &weights, 9);
+        let rank = |n: &str| names.iter().position(|x| x == n);
+        assert!(rank("actmotor") < rank("actforest"), "{names:?}");
+        assert!(rank("actforest").is_some(), "{names:?}");
     }
 
     #[test]
