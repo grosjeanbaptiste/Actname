@@ -142,5 +142,5 @@ fn the_request_word_ranks_above_its_category_and_its_context() {
     let found = classed("crocodile");
     let rank = |part: &str| found.iter().position(|n| n[3..].contains(part));
     assert!(rank("croc") < rank("tier"), "{found:?}");
-    assert!(rank("tier") < rank("sumpf"), "{found:?}");
+    assert!(rank("tier") < rank("sump"), "{found:?}");
 }

@@ -110,7 +110,14 @@ impl LetterModel {
                 *best = (*best).max(score);
             }
         }
-        let mut ranked: Vec<(i64, String)> = done.into_iter().map(|(n, s)| (s, n)).collect();
+        // Longer names add more steps: rank by the mean step, not the sum.
+        let mut ranked: Vec<(i64, String)> = done
+            .into_iter()
+            .map(|(name, score)| {
+                let letters = (name.len() - prefix.len()) as i64;
+                (score * 100 / letters, name)
+            })
+            .collect();
         ranked.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
         ranked.into_iter().map(|(_, name)| name).collect()
     }

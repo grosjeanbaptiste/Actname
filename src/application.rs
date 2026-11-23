@@ -68,18 +68,38 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
             found
         };
 
+        let statistical = criteria.strategy == Strategy::Statistical;
         candidates.sort_by(|left, right| {
-            right
+            let by_score = right
                 .score
                 .total
                 .cmp(&left.score.total)
-                .then_with(|| right.score.semantic.cmp(&left.score.semantic))
-                .then_with(|| left.name.cmp(&right.name))
+                .then_with(|| right.score.semantic.cmp(&left.score.semantic));
+            // The letter model's own order breaks ties (the sort is stable).
+            if statistical {
+                by_score
+            } else {
+                by_score.then_with(|| left.name.cmp(&right.name))
+            }
         });
 
         let mut seen = BTreeSet::new();
 
         candidates.retain(|candidate| seen.insert(candidate.name.clone()));
+
+        if statistical {
+            // `actile`, `actilec`, `actiler`… are one name: keep the best of a family.
+            let mut kept: Vec<String> = Vec::new();
+            candidates.retain(|candidate| {
+                let related = kept.iter().any(|name| {
+                    candidate.name.starts_with(name) || name.starts_with(&candidate.name)
+                });
+                if !related {
+                    kept.push(candidate.name.clone());
+                }
+                !related
+            });
+        }
 
         candidates.truncate(criteria.limit);
 
