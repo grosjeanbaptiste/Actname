@@ -2,6 +2,34 @@
 
 Actname is a deterministic, offline-first semantic naming engine written in Rust.
 
+## Contents
+
+- [How it works](#how-it-works)
+- [Install](#install)
+- [API](#api)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Build](#build)
+- [Tests](#tests)
+- [Generate names](#generate-names)
+- [JSON](#json)
+- [Strategies](#strategies)
+- [Architecture](#architecture)
+- [Scoring](#scoring)
+- [Limitations](#limitations)
+- [Multilingual semantic knowledge base](#multilingual-semantic-knowledge-base)
+- [Statistical strategy](#statistical-strategy)
+- [Morphological generation](#morphological-generation)
+- [Integrated semantic and morphological ranking](#integrated-semantic-and-morphological-ranking)
+
+## How it works
+
+```mermaid
+flowchart LR
+    cli["actname generate --prefix --domain --limit"] --> engine["deterministic, offline naming engine"]
+    engine --> names["names"]
+```
+
 ## Install
 
 Needs Rust 1.85 or newer (`rustup`).
