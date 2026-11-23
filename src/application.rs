@@ -4,11 +4,20 @@ use crate::domain::{
     Candidate, CandidateProvenance, Form, Lexicon, NamingCriteria, NamingError, Strategy,
     evaluate_matches_with, evaluate_with, semantic_tokens,
 };
+use crate::letters::LetterModel;
 use crate::morphology::{
     MorphologicalGenerator, MorphologicalRequest, MorphologicalStrategy, morphological_quality,
 };
 use crate::scoring::ScoringModel;
 use crate::semantics::SemanticKnowledgeBase;
+
+/// Whether `suffix` and `word` have a run of three letters in common.
+fn shares_three_letters(suffix: &str, word: &str) -> bool {
+    suffix
+        .as_bytes()
+        .windows(3)
+        .any(|run| word.as_bytes().windows(3).any(|other| other == run))
+}
 
 pub struct NamingService<'a, L: Lexicon> {
     lexicon: &'a L,
@@ -51,9 +60,13 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
             .map(|name| name.to_ascii_lowercase())
             .collect();
 
-        let mut candidates = self.lexical_candidates(criteria, &context, &exclusions);
-
-        candidates.extend(self.morphological_candidates(criteria, &context));
+        let mut candidates = if criteria.strategy == Strategy::Statistical {
+            self.statistical_candidates(criteria, &context, &exclusions)
+        } else {
+            let mut found = self.lexical_candidates(criteria, &context, &exclusions);
+            found.extend(self.morphological_candidates(criteria, &context));
+            found
+        };
 
         candidates.sort_by(|left, right| {
             right
@@ -71,6 +84,54 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
         candidates.truncate(criteria.limit);
 
         Ok(candidates)
+    }
+
+    /// Names drawn letter by letter from a model trained on every word of the
+    /// semantic base, steered by the words of the request's concepts.
+    fn statistical_candidates(
+        &self,
+        criteria: &NamingCriteria,
+        context: &BTreeSet<String>,
+        exclusions: &BTreeSet<String>,
+    ) -> Vec<Candidate> {
+        let knowledge = self
+            .knowledge
+            .as_ref()
+            .unwrap_or_else(|| crate::semantics::default_knowledge_base());
+        let anchors = knowledge.words_of(context);
+        if anchors.is_empty() {
+            return Vec::new();
+        }
+        let model = LetterModel::train(knowledge.terms());
+        let mut candidates = Vec::new();
+        for prefix in &criteria.prefixes {
+            for name in model.names(prefix, &anchors, criteria.max_length) {
+                if exclusions.contains(&name) {
+                    continue;
+                }
+                let suffix = &name[prefix.len()..];
+                let concepts: BTreeSet<String> = anchors
+                    .iter()
+                    .filter(|word| shares_three_letters(suffix, word))
+                    .flat_map(|word| knowledge.concepts_for(word))
+                    .filter(|concept| context.contains(concept))
+                    .collect();
+                if let Some(score) =
+                    evaluate_matches_with(&self.model, &name, Form::Coined, concepts.len())
+                {
+                    candidates.push(Candidate {
+                        name,
+                        form: Form::Coined,
+                        score,
+                        provenance: CandidateProvenance {
+                            concepts: concepts.into_iter().collect(),
+                            transformations: vec!["letter_model:order2".into()],
+                        },
+                    });
+                }
+            }
+        }
+        candidates
     }
 
     fn lexical_candidates(
@@ -160,6 +221,7 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
             Strategy::Hybrid => MorphologicalStrategy::Hybrid,
             Strategy::Composed => MorphologicalStrategy::Composed,
             Strategy::Coined => MorphologicalStrategy::Coined,
+            Strategy::Statistical => return Vec::new(),
         };
 
         let request = MorphologicalRequest {

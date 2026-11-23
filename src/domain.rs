@@ -8,6 +8,9 @@ pub enum Strategy {
     Hybrid,
     Composed,
     Coined,
+    /// Letters drawn from a model trained on the semantic base, steered by the
+    /// request. Draws nothing from the lexicon.
+    Statistical,
 }
 
 impl Strategy {

@@ -32,7 +32,7 @@ actname --help
 | `--readme` | no | `README.md` | The file read as the context when `--domain` is absent. A file named here that does not exist, or any file that cannot be read, is an error; a missing default `README.md` is simply no context. |
 | `--max-length` | no | `10` | Longest name, must exceed at least one prefix length. |
 | `--limit` | no | `20` | Number of names returned, must be positive. |
-| `--strategy` | no | `hybrid` | `composed`, `coined` or both (`hybrid`). |
+| `--strategy` | no | `hybrid` | `composed`, `coined` or both (`hybrid`); `statistical` draws letters from a model trained on every word of the `--semantics` base (see below). |
 | `--exclude` | no, repeatable | – | Names never returned. |
 | `--format` | no | `text` | `text` (table) or `json`. |
 | `--lexicon` | no | `resources/lexicon.tsv` | Lexicon file replacing the embedded one. |
@@ -228,6 +228,17 @@ printing an empty table. Add words with `--semantics` and `--lexicon`.
 
 Future extensions may introduce external dictionaries,
 morphological analysis and contextual semantic similarity.
+
+## Statistical strategy
+
+`--strategy statistical` proposes letter sequences instead of looking suffixes up in the lexicon.
+The model counts, for every two letters seen in a word of the semantic base, which letter follows
+(and where words end). A beam search of 256 sequences extends each name letter by letter,
+adding the permille probability of the next letter plus a bonus while the suffix stays inside a word
+of the request's concepts. Names keep the prefix, the maximum length and the usual scoring.
+
+It is deterministic: integer counts only, ties broken on the name. The same base and request give the
+same names. Feed it a large base (for example the words of LL in six languages) with `--semantics`.
 
 ## Morphological generation
 

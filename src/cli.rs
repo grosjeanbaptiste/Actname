@@ -31,7 +31,7 @@ struct CliOptions {
 
 /// The one-line usage shown for `--help` and after an error.
 pub fn usage() -> &'static str {
-    "actname generate --prefix act --prefix acte --domain \"architecture plans\" [--max-length 10] [--limit 20] [--strategy hybrid|composed|coined] [--exclude NAME] [--format text|json] [--lexicon FILE] [--scoring FILE] [--semantics FILE] [--readme FILE]"
+    "actname generate --prefix act --prefix acte --domain \"architecture plans\" [--max-length 10] [--limit 20] [--strategy hybrid|composed|coined|statistical] [--exclude NAME] [--format text|json] [--lexicon FILE] [--scoring FILE] [--semantics FILE] [--readme FILE]"
 }
 
 fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String> {
@@ -78,6 +78,7 @@ fn parse_arguments(arguments: Vec<String>) -> Result<Option<CliOptions>, String>
                     "hybrid" => Strategy::Hybrid,
                     "composed" => Strategy::Composed,
                     "coined" => Strategy::Coined,
+                    "statistical" => Strategy::Statistical,
                     _ => return Err("invalid generation strategy".into()),
                 };
             }

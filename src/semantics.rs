@@ -62,6 +62,20 @@ impl SemanticKnowledgeBase {
         expanded
     }
 
+    /// Every word the base knows (concepts and aliases), sorted.
+    pub fn terms(&self) -> impl Iterator<Item = &str> {
+        self.aliases.keys().map(String::as_str)
+    }
+
+    /// The words that belong to any of `concepts`, sorted.
+    pub fn words_of(&self, concepts: &BTreeSet<String>) -> BTreeSet<String> {
+        self.aliases
+            .iter()
+            .filter(|(_, owners)| owners.iter().any(|c| concepts.contains(c)))
+            .map(|(word, _)| word.clone())
+            .collect()
+    }
+
     pub fn concepts_for(&self, term: &str) -> BTreeSet<String> {
         let term = normalize(term);
 
