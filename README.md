@@ -66,7 +66,7 @@ Nothing the ranking depends on is fixed in the code; each file below replaces it
 - **Lexicon** (`--lexicon`): one `suffix<TAB>composed|coined<TAB>concept|concept` per line, `#` comments.
   Default: `resources/lexicon.tsv`.
 - **Semantics** (`--semantics`): one `concept<TAB>alias|alias|…[<TAB>broader|…[<TAB>related|…]]` per line,
-  in any language, `#` comments; a word of `--domain` that matches an alias or concept selects that
+  in any language, `#` comments, and an optional first line `concept<TAB>aliases<TAB>broader<TAB>related`; a word of `--domain` that matches an alias or concept selects that
   concept. The optional columns classify it: its broader concepts (a category) and the concepts that
   accompany it. The `statistical` strategy weights a request's own words 3, its category's 2, its
   context's 1. Default: `resources/semantic.tsv`.

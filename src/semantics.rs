@@ -10,6 +10,9 @@ pub struct SemanticKnowledgeBase {
     related: BTreeMap<String, BTreeSet<String>>,
 }
 
+/// Optional first line of a semantics file, so the file reads as a table.
+pub const HEADER: &str = "concept\taliases\tbroader\trelated";
+
 /// Weight of a word of the request's own concept, of its category, of its context.
 pub const DIRECT: u8 = 3;
 pub const BROADER: u8 = 2;
@@ -24,7 +27,7 @@ impl SemanticKnowledgeBase {
         for (index, line) in source.lines().enumerate() {
             let line = line.trim();
 
-            if line.is_empty() || line.starts_with('#') {
+            if line.is_empty() || line.starts_with('#') || line == HEADER {
                 continue;
             }
 
@@ -217,6 +220,14 @@ mod tests {
         assert_eq!(weights.get("animal"), Some(&BROADER));
         assert_eq!(weights.get("swamp"), Some(&RELATED));
         assert_eq!(weights.get("river"), Some(&RELATED));
+    }
+
+    #[test]
+    fn a_header_line_is_skipped() {
+        let kb = SemanticKnowledgeBase::from_tsv(&format!("{HEADER}\ncroc\tcrocodile\n"))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(kb.concepts_for("concept").is_empty());
+        assert!(kb.concepts_for("crocodile").contains("croc"));
     }
 
     #[test]
