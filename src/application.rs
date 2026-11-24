@@ -4,11 +4,20 @@ use crate::domain::{
     Candidate, CandidateProvenance, Form, Lexicon, NamingCriteria, NamingError, Strategy,
     evaluate_matches_with, evaluate_with, semantic_tokens,
 };
+use crate::letters::LetterModel;
 use crate::morphology::{
     MorphologicalGenerator, MorphologicalRequest, MorphologicalStrategy, morphological_quality,
 };
 use crate::scoring::ScoringModel;
 use crate::semantics::SemanticKnowledgeBase;
+
+/// Whether `suffix` and `word` have a run of three letters in common.
+fn shares_three_letters(suffix: &str, word: &str) -> bool {
+    suffix
+        .as_bytes()
+        .windows(3)
+        .any(|run| word.as_bytes().windows(3).any(|other| other == run))
+}
 
 pub struct NamingService<'a, L: Lexicon> {
     lexicon: &'a L,
@@ -51,26 +60,105 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
             .map(|name| name.to_ascii_lowercase())
             .collect();
 
-        let mut candidates = self.lexical_candidates(criteria, &context, &exclusions);
+        let mut candidates = if criteria.strategy == Strategy::Statistical {
+            self.statistical_candidates(criteria, &exclusions)
+        } else {
+            let mut found = self.lexical_candidates(criteria, &context, &exclusions);
+            found.extend(self.morphological_candidates(criteria, &context));
+            found
+        };
 
-        candidates.extend(self.morphological_candidates(criteria, &context));
-
+        let statistical = criteria.strategy == Strategy::Statistical;
         candidates.sort_by(|left, right| {
-            right
+            let by_score = right
                 .score
                 .total
                 .cmp(&left.score.total)
-                .then_with(|| right.score.semantic.cmp(&left.score.semantic))
-                .then_with(|| left.name.cmp(&right.name))
+                .then_with(|| right.score.semantic.cmp(&left.score.semantic));
+            // The letter model's own order breaks ties (the sort is stable).
+            if statistical {
+                by_score
+            } else {
+                by_score.then_with(|| left.name.cmp(&right.name))
+            }
         });
 
         let mut seen = BTreeSet::new();
 
         candidates.retain(|candidate| seen.insert(candidate.name.clone()));
 
+        if statistical {
+            // `actile`, `actilec`, `actiler`… are one name: keep the best of a family.
+            let mut kept: Vec<String> = Vec::new();
+            candidates.retain(|candidate| {
+                let related = kept.iter().any(|name| {
+                    candidate.name.starts_with(name) || name.starts_with(&candidate.name)
+                });
+                if !related {
+                    kept.push(candidate.name.clone());
+                }
+                !related
+            });
+        }
+
         candidates.truncate(criteria.limit);
 
         Ok(candidates)
+    }
+
+    /// Names drawn letter by letter from a model trained on every word of the
+    /// semantic base, steered by the words of the request's concepts.
+    fn statistical_candidates(
+        &self,
+        criteria: &NamingCriteria,
+        exclusions: &BTreeSet<String>,
+    ) -> Vec<Candidate> {
+        let knowledge = self
+            .knowledge
+            .as_ref()
+            .unwrap_or_else(|| crate::semantics::default_knowledge_base());
+        let weights = knowledge.expand_weighted(&criteria.context);
+        let anchors = knowledge.weighted_words(&weights);
+        if anchors.is_empty() {
+            return Vec::new();
+        }
+        let model = LetterModel::train(knowledge.terms());
+        let mut candidates = Vec::new();
+        for prefix in &criteria.prefixes {
+            for name in model.names(prefix, &anchors, criteria.max_length) {
+                if exclusions.contains(&name) {
+                    continue;
+                }
+                let suffix = &name[prefix.len()..];
+                let concepts: BTreeSet<String> = anchors
+                    .keys()
+                    .filter(|word| shares_three_letters(suffix, word))
+                    .flat_map(|word| knowledge.concepts_for(word))
+                    .filter(|concept| weights.contains_key(concept))
+                    .collect();
+                // A name rooted in the request's own words scores like three concepts,
+                // one rooted in its category like two, in its context like one.
+                let closest = concepts
+                    .iter()
+                    .filter_map(|concept| weights.get(concept))
+                    .max()
+                    .map_or(0, |weight| usize::from(*weight));
+                if let Some(score) =
+                    evaluate_matches_with(&self.model, &name, Form::Coined, closest)
+                {
+                    candidates.push(Candidate {
+                        name,
+                        form: Form::Coined,
+                        score,
+                        provenance: CandidateProvenance {
+                            concepts: concepts.into_iter().collect(),
+                            transformations: vec!["letter_model:order2".into()],
+                        },
+                    });
+                }
+            }
+        }
+        candidates
     }
 
     fn lexical_candidates(
@@ -160,6 +248,7 @@ impl<'a, L: Lexicon> NamingService<'a, L> {
             Strategy::Hybrid => MorphologicalStrategy::Hybrid,
             Strategy::Composed => MorphologicalStrategy::Composed,
             Strategy::Coined => MorphologicalStrategy::Coined,
+            Strategy::Statistical => return Vec::new(),
         };
 
         let request = MorphologicalRequest {

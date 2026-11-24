@@ -4,22 +4,39 @@ use std::sync::OnceLock;
 #[derive(Debug)]
 pub struct SemanticKnowledgeBase {
     aliases: BTreeMap<String, BTreeSet<String>>,
+    /// Concept → its broader concepts (a category: `animal` for `crocodile`).
+    broader: BTreeMap<String, BTreeSet<String>>,
+    /// Concept → concepts that accompany it in context.
+    related: BTreeMap<String, BTreeSet<String>>,
 }
+
+/// Optional first line of a semantics file, so the file reads as a table.
+pub const HEADER: &str = "concept\taliases\tbroader\trelated";
+
+/// Weight of a word of the request's own concept, of its category, of its context.
+pub const DIRECT: u8 = 3;
+pub const BROADER: u8 = 2;
+pub const RELATED: u8 = 1;
 
 impl SemanticKnowledgeBase {
     pub fn from_tsv(source: &str) -> Result<Self, SemanticError> {
         let mut aliases: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let mut broader: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let mut related: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
 
         for (index, line) in source.lines().enumerate() {
             let line = line.trim();
 
-            if line.is_empty() {
+            if line.is_empty() || line.starts_with('#') || line == HEADER {
                 continue;
             }
 
-            let Some((concept, variants)) = line.split_once('\t') else {
+            // concept <TAB> aliases [<TAB> broader concepts [<TAB> related concepts]]
+            let mut columns = line.splitn(4, '\t');
+            let (Some(concept), Some(variants)) = (columns.next(), columns.next()) else {
                 return Err(SemanticError::InvalidLine(index + 1));
             };
+            let (broad, rel) = (columns.next(), columns.next());
 
             let concept = normalize(concept);
 
@@ -43,9 +60,22 @@ impl SemanticKnowledgeBase {
             for term in terms {
                 aliases.entry(term).or_default().insert(concept.clone());
             }
+
+            for (column, into) in [(broad, &mut broader), (rel, &mut related)] {
+                let names = column
+                    .into_iter()
+                    .flat_map(|names| names.split('|'))
+                    .map(|name| normalize(name.trim()))
+                    .filter(|name| !name.is_empty());
+                into.entry(concept.clone()).or_default().extend(names);
+            }
         }
 
-        Ok(Self { aliases })
+        Ok(Self {
+            aliases,
+            broader,
+            related,
+        })
     }
 
     pub fn expand(&self, context: &str) -> BTreeSet<String> {
@@ -60,6 +90,46 @@ impl SemanticKnowledgeBase {
         }
 
         expanded
+    }
+
+    /// The concepts a request reaches, each with the weight of its closest
+    /// path: its own (`DIRECT`), its category (`BROADER`), its context (`RELATED`).
+    pub fn expand_weighted(&self, context: &str) -> BTreeMap<String, u8> {
+        let mut weights: BTreeMap<String, u8> = BTreeMap::new();
+        let mut raise = |concept: &String, weight: u8| {
+            let slot = weights.entry(concept.clone()).or_insert(0);
+            *slot = (*slot).max(weight);
+        };
+
+        for token in tokenize(context) {
+            for concept in self.aliases.get(&token).into_iter().flatten() {
+                raise(concept, DIRECT);
+                for broad in self.broader.get(concept).into_iter().flatten() {
+                    raise(broad, BROADER);
+                }
+                for rel in self.related.get(concept).into_iter().flatten() {
+                    raise(rel, RELATED);
+                }
+            }
+        }
+
+        weights
+    }
+
+    /// The words of the weighted concepts, each with its best weight.
+    pub fn weighted_words(&self, concepts: &BTreeMap<String, u8>) -> BTreeMap<String, u8> {
+        self.aliases
+            .iter()
+            .filter_map(|(word, owners)| {
+                let weight = owners.iter().filter_map(|c| concepts.get(c)).max()?;
+                Some((word.clone(), *weight))
+            })
+            .collect()
+    }
+
+    /// Every word the base knows (concepts and aliases), sorted.
+    pub fn terms(&self) -> impl Iterator<Item = &str> {
+        self.aliases.keys().map(String::as_str)
     }
 
     pub fn concepts_for(&self, term: &str) -> BTreeSet<String> {
@@ -139,6 +209,42 @@ mod tests {
                 .concepts_for("building")
                 .contains("architecture")
         );
+    }
+
+    #[test]
+    fn comments_and_optional_class_columns_are_accepted() {
+        let source = "# a comment\ncroc\tcrocodile|krokodil\tanimal\tswamp|river\nanimal\tanimal|tier\nswamp\tswamp|sumpf";
+        let kb = SemanticKnowledgeBase::from_tsv(source).unwrap_or_else(|e| panic!("{e}"));
+        let weights = kb.expand_weighted("crocodile");
+        assert_eq!(weights.get("croc"), Some(&DIRECT));
+        assert_eq!(weights.get("animal"), Some(&BROADER));
+        assert_eq!(weights.get("swamp"), Some(&RELATED));
+        assert_eq!(weights.get("river"), Some(&RELATED));
+    }
+
+    #[test]
+    fn a_header_line_is_skipped() {
+        let kb = SemanticKnowledgeBase::from_tsv(&format!("{HEADER}\ncroc\tcrocodile\n"))
+            .unwrap_or_else(|e| panic!("{e}"));
+        assert!(kb.concepts_for("concept").is_empty());
+        assert!(kb.concepts_for("crocodile").contains("croc"));
+    }
+
+    #[test]
+    fn a_concept_reached_two_ways_keeps_its_closest_weight() {
+        let kb = SemanticKnowledgeBase::from_tsv("a\txxx\tb\nb\tyyy\n")
+            .unwrap_or_else(|e| panic!("{e}"));
+        let weights = kb.expand_weighted("xxx yyy");
+        assert_eq!(weights.get("b"), Some(&DIRECT));
+    }
+
+    #[test]
+    fn the_words_of_a_class_carry_its_weight() {
+        let kb = SemanticKnowledgeBase::from_tsv("croc\tcrocodile\tanimal\nanimal\tanimal|tier\n")
+            .unwrap_or_else(|e| panic!("{e}"));
+        let words = kb.weighted_words(&kb.expand_weighted("crocodile"));
+        assert_eq!(words.get("crocodile"), Some(&DIRECT));
+        assert_eq!(words.get("tier"), Some(&BROADER));
     }
 
     #[test]

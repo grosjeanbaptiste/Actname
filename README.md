@@ -2,6 +2,34 @@
 
 Actname is a deterministic, offline-first semantic naming engine written in Rust.
 
+## Contents
+
+- [How it works](#how-it-works)
+- [Install](#install)
+- [API](#api)
+- [Features](#features)
+- [Requirements](#requirements)
+- [Build](#build)
+- [Tests](#tests)
+- [Generate names](#generate-names)
+- [JSON](#json)
+- [Strategies](#strategies)
+- [Architecture](#architecture)
+- [Scoring](#scoring)
+- [Limitations](#limitations)
+- [Multilingual semantic knowledge base](#multilingual-semantic-knowledge-base)
+- [Statistical strategy](#statistical-strategy)
+- [Morphological generation](#morphological-generation)
+- [Integrated semantic and morphological ranking](#integrated-semantic-and-morphological-ranking)
+
+## How it works
+
+```mermaid
+flowchart LR
+    cli["actname generate --prefix --domain --limit"] --> engine["deterministic, offline naming engine"]
+    engine --> names["names"]
+```
+
 ## Install
 
 Needs Rust 1.85 or newer (`rustup`).
@@ -32,7 +60,7 @@ actname --help
 | `--readme` | no | `README.md` | The file read as the context when `--domain` is absent. A file named here that does not exist, or any file that cannot be read, is an error; a missing default `README.md` is simply no context. |
 | `--max-length` | no | `10` | Longest name, must exceed at least one prefix length. |
 | `--limit` | no | `20` | Number of names returned, must be positive. |
-| `--strategy` | no | `hybrid` | `composed`, `coined` or both (`hybrid`). |
+| `--strategy` | no | `hybrid` | `composed`, `coined` or both (`hybrid`); `statistical` draws letters from a model trained on every word of the `--semantics` base (see below). |
 | `--exclude` | no, repeatable | – | Names never returned. |
 | `--format` | no | `text` | `text` (table) or `json`. |
 | `--lexicon` | no | `resources/lexicon.tsv` | Lexicon file replacing the embedded one. |
@@ -65,8 +93,11 @@ Nothing the ranking depends on is fixed in the code; each file below replaces it
 
 - **Lexicon** (`--lexicon`): one `suffix<TAB>composed|coined<TAB>concept|concept` per line, `#` comments.
   Default: `resources/lexicon.tsv`.
-- **Semantics** (`--semantics`): one `concept<TAB>alias|alias|…` per line, in any language; a word of
-  `--domain` that matches an alias or concept selects that concept. Default: `resources/semantic.tsv`.
+- **Semantics** (`--semantics`): one `concept<TAB>alias|alias|…[<TAB>broader|…[<TAB>related|…]]` per line,
+  in any language, `#` comments, and an optional first line `concept<TAB>aliases<TAB>broader<TAB>related`; a word of `--domain` that matches an alias or concept selects that
+  concept. The optional columns classify it: its broader concepts (a category) and the concepts that
+  accompany it. The `statistical` strategy weights a request's own words 3, its category's 2, its
+  context's 1. Default: `resources/semantic.tsv`.
 - **Scoring** (`--scoring`): `key=value` lines over the defaults, `#` comments. Keys, with defaults:
   `weight_semantic=45`, `weight_readability=30`, `weight_originality=25` (only the ratios matter),
   `originality_composed=70`, `originality_coined=90`, `coined_blend_form=55`,
@@ -228,6 +259,17 @@ printing an empty table. Add words with `--semantics` and `--lexicon`.
 
 Future extensions may introduce external dictionaries,
 morphological analysis and contextual semantic similarity.
+
+## Statistical strategy
+
+`--strategy statistical` proposes letter sequences instead of looking suffixes up in the lexicon.
+The model counts, for every two letters seen in a word of the semantic base, which letter follows
+(and where words end). A beam search of 256 sequences extends each name letter by letter,
+adding the permille probability of the next letter plus a bonus while the suffix stays inside a word
+of the request's concepts. Names keep the prefix, the maximum length and the usual scoring.
+
+It is deterministic: integer counts only, ties broken on the name. The same base and request give the
+same names. Feed it a large base (for example the words of LL in six languages) with `--semantics`.
 
 ## Morphological generation
 

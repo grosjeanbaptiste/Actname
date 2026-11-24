@@ -3,6 +3,7 @@ pub mod cli;
 pub mod context;
 pub mod domain;
 pub mod infrastructure;
+pub mod letters;
 pub mod lexicon;
 pub mod morphology;
 pub mod scoring;
